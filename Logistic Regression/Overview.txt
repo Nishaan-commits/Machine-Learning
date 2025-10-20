@@ -1,0 +1,9 @@
+1. Downloading a real world dataset from the Kaggle 
+2. Exploratory data analysis and visualization
+3. Splitting a dataset into training, validation and test sets
+4. Filling/imputing missing values in numeric columns
+5. Scaling numeric features to a (0,1) range
+6. Encoding categorical columns as one-hot vectors
+7. Training a logistic regression model using Scikit-learn
+8. Evaluating a model using a validation set and test set
+9. Saving a model to disk and loading it back
