@@ -207,7 +207,7 @@ train_inputs[numeric_cols].describe()
 # %%
 # Ecvoding Categorical Columns using One Hot Encoding
 from sklearn.preprocessing import OneHotEncoder
-encoder = OneHotEncoder(handle_unknown='ignore')
+encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
 encoder.fit(df[categorical_cols])
 
 # %%
@@ -220,29 +220,279 @@ print(encoded_cols)
 
 # %%
 # All of the above columns will be added to the data sets
-# OneHotEncoder.transform returns a sparse matrix (depending on settings).
-# Convert to dense array so the shape matches the list of encoded column names
-train_enc = encoder.transform(train_inputs[categorical_cols])
-val_enc = encoder.transform(val_inputs[categorical_cols])
-test_enc = encoder.transform(test_inputs[categorical_cols])
+train_inputs[encoded_cols] = encoder.transform(train_inputs[categorical_cols])
+val_inputs[encoded_cols] = encoder.transform(val_inputs[categorical_cols])
+test_inputs[encoded_cols] = encoder.transform(test_inputs[categorical_cols])
 
-# If the encoder returned a sparse matrix, convert to array; otherwise keep as is
-try:
-    train_arr = train_enc.toarray()
-except AttributeError:
-    train_arr = train_enc
-
-try:
-    val_arr = val_enc.toarray()
-except AttributeError:
-    val_arr = val_enc
-
-try:
-    test_arr = test_enc.toarray()
-except AttributeError:
-    test_arr = test_enc
-
-train_inputs[encoded_cols] = train_arr
-val_inputs[encoded_cols] = val_arr
-test_inputs[encoded_cols] = test_arr
 # %%
+# When dataframe gets highly fragmented run these lines to defragment it
+# train_inputs = train_inputs.copy()
+# val_inputs = val_inputs.copy()
+# test_inputs = test_inputs.copy()    
+# %%    
+# Let's see if these columns have been added
+pd.set_option('display.max_columns', None)
+test_inputs.head()
+
+# %%
+# Saving Processed Data to Disk
+# It can be useful to save the processed data to disk, so that we don't have to repeat the preprocessing
+# every time you open the notebook. The parquet format is a fast and efficient format for saving and
+# loading Pandas dataframes
+
+print('train_inputs: ', train_inputs.shape)
+print('train_targets: ', train_targets.shape)
+print('val_inputs: ', val_inputs.shape)
+print('val_targets: ', val_targets.shape)
+print('test_inputs: ', test_inputs.shape)
+print('test_targets: ', test_targets.shape)
+
+# %%
+train_inputs.to_parquet('train_inputs.parquet') 
+val_inputs.to_parquet('val_inputs.parquet')
+test_inputs.to_parquet('test_inputs.parquet')
+
+# %%
+pd.DataFrame(train_targets).to_parquet('train_targets.parquet')
+pd.DataFrame(val_targets).to_parquet('val_targets.parquet')
+pd.DataFrame(test_targets).to_parquet('test_targets.parquet')
+
+# %%
+
+#We can read the data back using pd.read_parquet
+train_inputs = pd.read_parquet('train_inputs.parquet')
+val_inputs = pd.read_parquet('val_inputs.parquet')
+test_inputs = pd.read_parquet('test_inputs.parquet')
+
+train_targets = pd.read_parquet('train_targets.parquet')[target_col]
+val_targets = pd.read_parquet('val_targets.parquet')[target_col]
+test_targets = pd.read_parquet('test_targets.parquet')[target_col]
+
+# %%
+# The benefit of saving the processed data is that we can skip all the preprocessing steps and directly
+# load the data from disk whenever we want to work with it
+# Basically When you have done a lot of preprocessing just save the outputs after the preprocessing
+
+# %%
+# Training a Logistic Regression Model
+# Logistic Regression is a simple yet powerful model for binary classification tasks.In a Logistic 
+# Regression model:
+
+#1 we take linear combination (or weighted sum) of the input features
+#2 we apply the sigmoid function to the linear combination to get a probability value between 0 and 1
+#3 this number represents the probability of the input being classified as "Yes" (e.g., 'Yes' for RainTomorrow)
+#4 instead of RMSE, the cross entropy loss function is used to evaluate the results
+
+# %%
+from sklearn.linear_model import LogisticRegression
+model = LogisticRegression(solver='liblinear')
+model.fit(train_inputs[numeric_cols + encoded_cols], train_targets)
+
+# %%
+# Let's check the weights and biases of the trained model
+coef_table = pd.DataFrame({
+    'Feature': numeric_cols + encoded_cols,
+    'Coefficient': model.coef_[0]
+})
+print(coef_table.sort_values(by='Coefficient', ascending=False))
+print(model.intercept_)
+# %%
+
+sns.barplot(data=coef_table.sort_values(by='Coefficient', ascending=False).head(10),y='Feature', x='Coefficient')
+
+# %%
+# Making Predictions and Evaluating the Model
+# We can use the trained model to make predictions on the validation and test sets using the predict method
+
+X_train = train_inputs[numeric_cols + encoded_cols]
+X_val = val_inputs[numeric_cols + encoded_cols]
+X_test = test_inputs[numeric_cols + encoded_cols]
+
+train_preds = model.predict(X_train) 
+
+# %%
+train_preds
+ 
+# %%
+train_targets
+
+# %%
+# We can output a probabilistic prediction using the predict_proba method
+train_probs = model.predict_proba(X_train)
+train_probs
+# The numbers above indicate the probabilities for the target classes "No" and 'Yes' respectively
+
+# %%
+# We can test the accuracy of the model's predictions by computing the percentage of matching values
+# in train_preds and train_targets
+
+from sklearn.metrics import accuracy_score
+accuracy_score(train_targets, train_preds)
+# %%
+
+from sklearn.metrics import confusion_matrix
+confusion_matrix(train_targets, train_preds, normalize='true')
+
+# %%
+# Let's define a helper function to generate predictions, compute the accuracy and plot a confusion
+# matrix for a given set of inputs
+
+def predict_and_plot(inputs,targets, name=''):
+    preds = model.predict(inputs)
+    acc = accuracy_score(targets, preds)
+    print("Accuracy: {:.2f}%".format(acc * 100))
+    
+    cm = confusion_matrix(targets, preds, normalize='true')
+    plt.figure()
+    sns.heatmap(cm, annot=True) 
+    plt.xlabel('Prediction')
+    plt.ylabel('Target')
+    plt.title(f'Confusion Matrix for {name} set')
+    
+    return preds
+# %%
+train_preds = predict_and_plot(X_train, train_targets, name='Training')
+# %%
+# Let's compute the model's accuracy on validation and test sets
+val_preds = predict_and_plot(X_val, val_targets, name='Validation')
+# %%
+test_preds = predict_and_plot(X_test, test_targets, name='Test')
+# %%
+# The accuracy of the model on the test and validation set are above 84%, which suggests that our model
+# generalizes well to unseen data.
+# But how good is 84% accuracy really? While this depends on the nature of problem and on business
+# requirements, a good way to verify whether a model has actually learned something useful is to 
+# compare its results to a "random" or "dumb" model.
+# Creating 2 dumb models for comparison
+
+def random_guess(inputs):
+    return np.random.choice(['No','Yes'], size=len(inputs))
+
+def all_no(inputs):
+    return np.full(len(inputs), 'No')
+# %%
+accuracy_score(test_targets, random_guess(X_test))
+# %%
+accuracy_score(test_targets, all_no(X_test))
+# %%
+# Our model performs significantly better than both dumb models, indicating that it has learned useful
+# patterns from the data.
+
+
+# %%
+# Making Predictions on a single input
+# Once the model has been trained to a satisfactory accuracy, it can be used to make predictions on new data.
+# Consider the following dictionary containing data collected from the Katherine weather department today.
+
+new_input = {'Date' : '2021-06-19',
+             'Location' : 'Katherine',
+                'MinTemp' : 23.2,
+                'MaxTemp' : 33.2,
+                'Rainfall' : 10.2,
+                'Evaporation' : 4.2,
+                'Sunshine' : np.nan,
+                'WindGustDir' : 'NNW',
+                'WindGustSpeed' : 52.0,
+                'WindDir9am' : 'NW',
+                'WindDir3pm' : 'NNE',
+                'WindSpeed9am' : 13.0,
+                'WindSpeed3pm' : 20.0,
+                'Humidity9am' : 89.0,
+                'Humidity3pm' : 58.0,
+                'Pressure9am' : 1004.8,
+                'Pressure3pm' : 1001.5,
+                'Cloud9am' : 8.0,
+                'Cloud3pm' : 5.0,
+                'Temp9am' : 25.7,
+                'Temp3pm' : 33.0,
+                'RainToday' : 'Yes'}
+
+# The first step is to convert this dictionary into a dataframe.
+new_input_df = pd.DataFrame([new_input])
+new_input_df
+
+# %%
+# We must apply the same transformations applied while training the model:
+#1 Imputation of missing values
+#2 scaling numeric features
+#3 encoding categorical features
+
+new_input_df[numeric_cols] = imputer.transform(new_input_df[numeric_cols])
+new_input_df[numeric_cols] = scaler.transform(new_input_df[numeric_cols])
+new_input_df[encoded_cols] = encoder.transform(new_input_df[categorical_cols])
+# %%
+X_new_input = new_input_df[numeric_cols+encoded_cols]
+X_new_input
+# %%
+# We can now make a prediction
+prediction =model.predict(X_new_input)[0]
+prediction
+
+# %%
+prob = model.predict_proba(X_new_input)[0]
+prob
+# %%
+# Helper Function to make predictions on new inputs
+def predict_input(single_input):
+    input_df = pd.DataFrame([single_input])
+    input_df[numeric_cols] = imputer.transform(input_df[numeric_cols])
+    input_df[numeric_cols] = scaler.transform(input_df[numeric_cols])
+    input_df[encoded_cols] = encoder.transform(input_df[categorical_cols])
+    
+    X_input = input_df[numeric_cols + encoded_cols]
+    pred = model.predict(X_input)[0]
+    prob = model.predict_proba(X_input)[0][list(model.classes_).index(pred)]
+    
+    return pred, prob   
+# %%
+single_input = {'Date' : '2021-06-19',
+             'Location' : 'Perth',
+                'MinTemp' : 23.2,
+                'MaxTemp' : 33.2,
+                'Rainfall' : 10.2,
+                'Evaporation' : 4.2,
+                'Sunshine' : np.nan,
+                'WindGustDir' : 'NNW',
+                'WindGustSpeed' : 50.0,
+                'WindDir9am' : 'NW',
+                'WindDir3pm' : 'NNE',
+                'WindSpeed9am' : 13.0,
+                'WindSpeed3pm' : 20.0,
+                'Humidity9am' : 89.0,
+                'Humidity3pm' : 58.0,
+                'Pressure9am' : 1000.8,
+                'Pressure3pm' : 1001.5,
+                'Cloud9am' : 8.0,
+                'Cloud3pm' : 5.0,
+                'Temp9am' : 20.7,
+                'Temp3pm' : 33.0,
+                'RainToday' : 'No'}
+
+predict_input(single_input)
+# %%
+# Saving and Loading Trained Models
+import joblib
+
+#Let's first create a dictionary containing all the required objects
+aussie_rain = {
+    'model' : model,
+    'imputer' : imputer,
+    'scaler' : scaler,
+    'encoder' : encoder,
+    'input_cols' : input_cols,
+    'target_col' : target_col,
+    'numeric_cols' : numeric_cols,
+    'categorical_cols' : categorical_cols,
+    'encoded_cols' : encoded_cols,
+}
+
+# We can now save this dictionary to disk using joblib
+joblib.dump(aussie_rain, 'aussie_rain_model.joblib')
+
+# %%
+# We can load the model back using joblib.load
+aussie_rain2 = joblib.load('aussie_rain_model.joblib')
+
+#Let's use the loaded model to make predictions on the original test set
+test_preds2 = aussie_rain2['model'].predict(X_test)
+accuracy_score(test_targets, test_preds2)
