@@ -1,0 +1,15 @@
+Project: NYC Taxi Fare Prediction
+
+Here's an outline of the project:
+#1 Download the Dataset
+#2 Explore and Analyze the Dataset
+#3 Prepare the dataset for ML Training
+#4 Train hardcoded and baseline models
+#5 Make Predictions and submit to Kaggle
+#6 Perform Feature Engineering 
+#7 Train and evaluate different models
+#8 Tune hyperparameters for the best models
+#9 Train on a GPU with the entire dataset
+#10 Document & publish the project online
+
+#Tip1: Create an outline for your notebook & for each section before you start coding.

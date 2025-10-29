@@ -1,4 +1,4 @@
-How to Approach a MAchine Learning Problem
+How to Approach a Machine Learning Problem
 
 1. Explore the data and find correlations between inputs and targets
 2. Pick the right model, loss functions and optimizer for the problem at hand

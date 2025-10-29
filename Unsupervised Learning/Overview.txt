@@ -1,0 +1,10 @@
+The following topics are covered:
+
+#1 Overview of unsupervised learning algorithms in Scikit-learn 
+#2 Clustering algorithms: K Means, DBScan, Hierarchical Clustering etc,
+#3 Dimensionality reduction (PCA) and manifold learning (t-SNE)
+
+# Introduction to Unsupervised Learning
+Unsupervised machine learning refers to the category of machine learning techniques
+where models are trained on a dataset without labels. Unsupervised learning is generally
+use to discover patterns in data and reduce high-dimensional data to fewer dimensions.
